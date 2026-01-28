@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tringa Game - Complete Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .animate-bounce {
+            animation: bounce 1s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(-5%); }
+            50% { transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        // Main App State
+        let appState = {
+            mode: 'home', // 'home', 'game', 'admin'
+            isAdminLoggedIn: false
+        };
+
+        // Game State
+        let gameState = {
+            balance: 1000,
+            activeTab: 'color',
+            betAmount: 10,
+            selectedBet: null,
+            history: [],
+            timer: 30,
+            isPlaying: false,
+            multiplier: 1.00,
+            aviatorActive: false
+        };
+
+        // Admin State
+        let adminState = {
+            username: '',
+            password: '',
+            showPassword: false,
+            activeTab: 'dashboard',
+            users: [
+                { id: 1, name: 'Rahul Kumar', balance: 5420, totalBets: 156, winRate: 45, status: 'active', joined: '2024-01-15' },
+                { id: 2, name: 'Priya Sharma', balance: 8900, totalBets: 243, winRate: 52, status: 'active', joined: '2024-01-18' },
+                { id: 3, name: 'Amit Singh', balance: 1200, totalBets: 89, winRate: 38, status: 'active', joined: '2024-01-20' },
+                { id: 4, name: 'Sneha Patel', balance: 12500, totalBets: 367, winRate: 58, status: 'active', joined: '2024-01-12' },
+                { id: 5, name: 'Vikram Raj', balance: 450, totalBets: 45, winRate: 42, status: 'blocked', joined: '2024-01-22' },
+            ],
+            gameStats: {
+                totalUsers: 1247,
+                activeUsers: 342,
+                totalRevenue: 456780,
+                todayRevenue: 12450,
+                totalBets: 45678,
+                todayBets: 892,
+                avgBetAmount: 125,
+                platformProfit: 89560
+            },
+            recentBets: [
+                { id: 1, user: 'Rahul Kumar', game: 'Color', bet: 'Red', amount: 100, result: 'Win', profit: 100, time: '10:45 AM' },
+                { id: 2, user: 'Priya Sharma', game: 'Wingo', bet: 'Big', amount: 200, result: 'Loss', profit: -200, time: '10:43 AM' },
+                { id: 3, user: 'Amit Singh', game: 'Number', bet: '7', amount: 50, result: 'Win', profit: 450, time: '10:42 AM' },
+                { id: 4, user: 'Sneha Patel', game: 'Aviator', bet: '2.5x', amount: 500, result: 'Win', profit: 750, time: '10:40 AM' },
+                { id: 5, user: 'Vikram Raj', game: 'Color', bet: 'Green', amount: 150, result: 'Loss', profit: -150, time: '10:38 AM' },
+            ],
+            gameSettings: {
+                minBet: 10,
+                maxBet: 10000,
+                colorPayout: 2,
+                numberPayout: 9,
+                bigSmallPayout: 2,
+                roundDuration: 30,
+                aviatorMinMultiplier: 1.5,
+                aviatorMaxMultiplier: 10,
+                maintenanceMode: false
+            }
+        };
+
+        // Icons as SVG
+        const icons = {
+            trophy: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>',
+            wallet: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>',
+            clock: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+            plane: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>',
+            chart: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>',
+            users: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+            activity: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+            settings: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
+            lock: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+            eye: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+            eyeOff: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>',
+            dollar: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+            trending: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>',
+            alert: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>'
+        };
+
+        // Timer for game
+        let timerInterval;
+        let aviatorInterval;
+
+        function startGameTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (gameState.activeTab !== 'aviator') {
+                    gameState.timer--;
+                    if (gameState.timer <= 0) {
+                        if (gameState.selectedBet && gameState.betAmount > 0) {
+                            processGameResult();
+                        }
+                        gameState.timer = 30;
+                    }
+                    render();
+                }
+            }, 1000);
+        }
+
+        function startAviatorMultiplier() {
+            clearInterval(aviatorInterval);
+            aviatorInterval = setInterval(() => {
+                if (gameState.aviatorActive) {
+                    gameState.multiplier += 0.01;
+                    if (Math.random() < 0.02 && gameState.multiplier > 1.5) {
+                        gameState.aviatorActive = false;
+                        if (gameState.isPlaying) {
+                            addGameHistory('Aviator', '✈️ Crashed', gameState.betAmount, -gameState.betAmount);
+                            gameState.isPlaying = false;
+                        }
+                        gameState.multiplier = 1.00;
+                    }
+                    render();
+                }
+            }, 100);
+        }
+
+        function processGameResult() {
+            const randomNum = Math.floor(Math.random() * 10);
+            const colors = ['Red', 'Green', 'Violet'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            const isBig = randomNum >= 5;
+            const isSmall = randomNum < 5;
+
+            let win = false;
+            let winAmount = 0;
+
+            if (gameState.activeTab === 'color') {
+                if (gameState.selectedBet === randomColor) {
+                    win = true;
+                    winAmount = gameState.betAmount * 2;
+                }
+            } else if (gameState.activeTab === 'number') {
+                if (gameState.selectedBet === randomNum) {
+                    win = true;
+                    winAmount = gameState.betAmount * 9;
+                }
+            } else if (gameState.activeTab === 'wingo') {
+                if (gameState.selectedBet === 'Big' && isBig) {
+                    win = true;
+                    winAmount = gameState.betAmount * 2;
+                } else if (gameState.selectedBet === 'Small' && isSmall) {
+                    win = true;
+                    winAmount = gameState.betAmount * 2;
+                } else if (gameState.selectedBet === randomColor) {
+                    win = true;
+                    winAmount = gameState.betAmount * 2;
+                } else if (gameState.selectedBet === randomNum) {
+                    win = true;
+                    winAmount = gameState.betAmount * 9;
+                }
+            }
+
+            if (win) {
+                gameState.balance += winAmount;
+                addGameHistory(gameState.activeTab, gameState.selectedBet + ' ✓', gameState.betAmount, winAmount);
+            } else {
+                gameState.balance -= gameState.betAmount;
+                addGameHistory(gameState.activeTab, gameState.selectedBet + ' ✗', gameState.betAmount, -gameState.betAmount);
+            }
+
+            gameState.selectedBet = null;
+            render();
+        }
+
+        function addGameHistory(game, bet, amount, result) {
+            gameState.history.unshift({
+                game,
+                bet,
+                amount,
+                result,
+                time: new Date().toLocaleTimeString()
+            });
+            if (gameState.history.length > 10) {
+                gameState.history.pop();
+            }
+        }
+
+        function placeBet(bet) {
+            if (gameState.balance >= gameState.betAmount) {
+                gameState.selectedBet = bet;
+                render();
+            } else {
+                alert('Insufficient balance!');
+            }
+        }
+
+        function startAviatorGame() {
+            if (gameState.balance >= gameState.betAmount && !gameState.aviatorActive) {
+                gameState.aviatorActive = true;
+                gameState.isPlaying = true;
+                gameState.multiplier = 1.00;
+                startAviatorMultiplier();
+                render();
+            }
+        }
+
+        function cashoutAviator() {
+            if (gameState.isPlaying && gameState.aviatorActive) {
+                const winAmount = gameState.betAmount * gameState.multiplier;
+                gameState.balance += winAmount - gameState.betAmount;
+                addGameHistory('Aviator', gameState.multiplier.toFixed(2) + 'x', gameState.betAmount, winAmount - gameState.betAmount);
+                gameState.isPlaying = false;
+                render();
+            }
+        }
+
+        function adminLogin() {
+            if (adminState.username === 'pr' && adminState.password === 'pr123') {
+                appState.isAdminLoggedIn = true;
+                appState.mode = 'admin';
+                render();
+            } else {
+                alert('Invalid credentials!');
+            }
+        }
+
+        function adminLogout() {
+            appState.isAdminLoggedIn = false;
+            adminState.username = '';
+            adminState.password = '';
+            appState.mode = 'home';
+            render();
+        }
+
+        function toggleUserStatus(userId) {
+            const user = adminState.users.find(u => u.id === userId);
+            if (user) {
+                user.status = user.status === 'active' ? 'blocked' : 'active';
+                render();
+            }
+        }
+
+        function updateUserBalance(userId) {
+            const newAmount = prompt('Enter new balance amount:');
+            if (newAmount && !isNaN(newAmount)) {
+                const user = adminState.users.find(u => u.id === userId);
+                if (user) {
+                    user.balance = parseFloat(newAmount);
+                    render();
+                }
+            }
+        }
+
+        // Render Functions
+        function renderHome() {
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
+                    <div class="text-center">
+                        <div class="mb-8">
+                            <div class="inline-block bg-gradient-to-r from-yellow-400 to-orange-500 p-6 rounded-full mb-4">
+                                ${icons.trophy}
+                            </div>
+                            <h1 class="text-6xl font-bold text-white mb-4 bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">Tringa Game</h1>
+                            <p class="text-xl text-gray-300">Color • Number • Aviator • Wingo</p>
+                        </div>
+                        
+                        <div class="space-y-4 max-w-md mx-auto">
+                            <button onclick="switchMode('game')" class="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-lg text-xl transition-all shadow-lg hover:shadow-xl transform hover:scale-105">
+                                🎮 Play Game
+                            </button>
+                            
+                            <button onclick="switchMode('admin')" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-4 px-8 rounded-lg text-xl transition-all shadow-lg hover:shadow-xl transform hover:scale-105">
+                                👨‍💼 Admin Panel
+                            </button>
+                        </div>
+                        
+                        <div class="mt-8 text-gray-400 text-sm">
+                            <p>Powered by Tringa Gaming Platform</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderGame() {
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-4">
+                    <div class="max-w-4xl mx-auto">
+                        <div class="bg-gray-800 rounded-lg p-4 mb-4 flex justify-between items-center">
+                            <button onclick="switchMode('home')" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg">← Back</button>
+                            <div class="flex items-center gap-2">
+                                <div class="w-6 h-6">${icons.trophy}</div>
+                                <h1 class="text-2xl font-bold">Tringa Game</h1>
+                            </div>
+                            <div class="flex items-center gap-2 bg-green-600 px-4 py-2 rounded-lg">
+                                <div class="w-5 h-5">${icons.wallet}</div>
+                                <span class="font-bold">₹${gameState.balance}</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-4 gap-2 mb-4">
+                            ${['color', 'number', 'wingo', 'aviator'].map(tab => `
+                                <button onclick="switchGameTab('${tab}')" class="py-3 rounded-lg font-bold capitalize transition-all ${gameState.activeTab === tab ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'}">
+                                    ${tab}
+                                </button>
+                            `).join('')}
+                        </div>
+
+                        ${gameState.activeTab !== 'aviator' ? `
+                            <div class="bg-gray-800 rounded-lg p-4 mb-4 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-5 h-5">${icons.clock}</div>
+                                    <span>Next Round</span>
+                                </div>
+                                <span class="text-2xl font-bold text-yellow-400">${gameState.timer}s</span>
+                            </div>
+                        ` : ''}
+
+                        <div class="bg-gray-800 rounded-lg p-4 mb-4">
+                            <label class="block text-sm mb-2">Bet Amount</label>
+                            <div class="flex gap-2">
+                                ${[10, 50, 100, 500].map(amount => `
+                                    <button onclick="setBetAmount(${amount})" class="flex-1 py-2 rounded-lg font-bold transition-all ${gameState.betAmount === amount ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'}">
+                                        ₹${amount}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-800 rounded-lg p-4 mb-4">
+                            ${renderGameContent()}
+                        </div>
+
+                        ${gameState.selectedBet && gameState.activeTab !== 'aviator' ? `
+                            <div class="bg-green-800 rounded-lg p-4 mb-4 text-center">
+                                <p class="text-sm">Bet Placed</p>
+                                <p class="text-xl font-bold">${gameState.selectedBet} - ₹${gameState.betAmount}</p>
+                            </div>
+                        ` : ''}
+
+                        <div class="bg-gray-800 rounded-lg p-4">
+                            <h3 class="font-bold mb-3 flex items-center gap-2">
+                                <div class="w-5 h-5">${icons.trending}</div>
+                                Recent History
+                            </h3>
+                            <div class="space-y-2">
+                                ${gameState.history.length === 0 ? '<p class="text-gray-400 text-center py-4">No bets yet</p>' : 
+                                    gameState.history.map(item => `
+                                        <div class="bg-gray-700 rounded p-3 flex justify-between items-center">
+                                            <div>
+                                                <span class="font-bold capitalize">${item.game}</span>
+                                                <span class="text-gray-400 ml-2">${item.bet}</span>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="font-bold ${item.result > 0 ? 'text-green-400' : 'text-red-400'}">
+                                                    ${item.result > 0 ? '+' : ''}₹${item.result.toFixed(2)}
+                                                </div>
+                                                <div class="text-xs text-gray-400">${item.time}</div>
+                                            </div>
+                                        </div>
+                                    `).join('')
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderGameContent() {
+            if (gameState.activeTab === 'color') {
+                return `
+                    <div class="grid grid-cols-3 gap-3">
+                        ${['Red', 'Green', 'Violet'].map(color => `
+                            <button onclick="placeBet('${color}')" class="p-6 rounded-lg font-bold text-white transition-all ${gameState.selectedBet === color ? 'ring-4 ring-yellow-400 scale-105' : ''} ${
+                                color === 'Red' ? 'bg-red-500 hover:bg-red-600' :
+                                color === 'Green' ? 'bg-green-500 hover:bg-green-600' :
+                                'bg-purple-500 hover:bg-purple-600'
+                            }">
+                                ${color}
+                            </button>
+                        `).join('')}
+                    </div>
+                `;
+            } else if (gameState.activeTab === 'number') {
+                return `
+                    <div class="grid grid-cols-5 gap-2">
+                        ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => `
+                            <button onclick="placeBet(${num})" class="p-4 rounded-lg font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all ${gameState.selectedBet === num ? 'ring-4 ring-yellow-400 scale-105' : ''}">
+                                ${num}
+                            </button>
+                        `).join('')}
+                    </div>
+                `;
+            } else if (gameState.activeTab === 'wingo') {
+                return `
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <button onclick="placeBet('Big')" class="p-6 rounded-lg font-bold text-white bg-orange-500 hover:bg-orange-600 transition-all ${gameState.selectedBet === 'Big' ? 'ring-4 ring-yellow-400 scale-105' : ''}">
+                                Big (5-9)
+                            </button>
+                            <button onclick="placeBet('Small')" class="p-6 rounded-lg font-bold text-white bg-teal-500 hover:bg-teal-600 transition-all ${gameState.selectedBet === 'Small' ? 'ring-4 ring-yellow-400 scale-105' : ''}">
+                                Small (0-4)
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-3 mb-3">
+                            ${['Red', 'Green', 'Violet'].map(color => `
+                                <button onclick="placeBet
